@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>返回刷新测试器</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #1e1e1e; color: #fff; }
+        button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 10px; background: #4CAF50; color: #fff; cursor: pointer; }
+        .status { margin-top: 20px; padding: 15px; background: #333; border-radius: 8px; }
+        .tip { color: #ffaa00; }
+    </style>
+</head>
+<body>
+    <h2>🔬 酒馆刷新检测器</h2>
+    <p class="tip">请在酒馆聊天框输入一段<span style="color:red;">独一无二的文字</span>（如“ABC123”），并滚动到聊天记录中间位置。</p>
+    <button id="testBtn">🚀 点击这里返回酒馆（不刷新）</button>
+    <div class="status" id="log">等待操作...</div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', function() {
+            if (!window.opener) {
+                document.getElementById('log').innerHTML = '❌ 错误：请确保本页面是通过 <strong>target="_blank"</strong> 从酒馆打开的。';
+                return;
+            }
+
+            document.getElementById('log').innerHTML = '✅ 正在尝试返回...';
+            
+            // 关键操作：把焦点还给酒馆页面，然后关闭自己
+            try {
+                // 尝试聚焦旧页面（安卓WebView会切换到那个Activity）
+                window.opener.focus();
+            } catch(e) {
+                // 跨域可能无法focus，但没关系，关闭自己后系统会自动切回去
+                console.log('focus跨域忽略');
+            }
+
+            // 延迟300ms后关闭自己，确保焦点切换完成
+            setTimeout(() => {
+                window.close();
+                // 如果 window.close() 被安卓拦截，提示手动关闭
+                document.getElementById('log').innerHTML = '🔄 如果页面未自动关闭，请手动关闭此标签页，然后观察酒馆。';
+            }, 300);
+        });
+
+        // 如果你想让页面打开后自动执行（可选），取消下面注释：
+        // setTimeout(() => document.getElementById('testBtn').click(), 1000);
+    </script>
+</body>
+</html>
