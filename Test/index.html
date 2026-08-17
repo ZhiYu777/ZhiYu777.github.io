@@ -3,342 +3,259 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WebView 环境检测 + 桥接探测</title>
+  <title>外部控制台 · 探测与执行</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background: #f5f7fa;
-      padding: 20px;
-      color: #1e293b;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: #0b0e14;
+      color: #e0e0e0;
+      padding: 12px;
     }
     .card {
-      background: white;
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+      background: #1e2229;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    h1 { font-size: 22px; margin-bottom: 12px; }
-    h2 { font-size: 16px; margin: 12px 0 8px; color: #475569; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      padding: 6px 0;
-      border-bottom: 1px solid #f1f5f9;
+    h1 { font-size: 20px; color: #f0f0f0; margin-bottom: 8px; }
+    h2 { font-size: 16px; color: #aaa; margin: 10px 0 6px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+    label { display: block; margin: 6px 0 2px; font-size: 14px; color: #ccc; }
+    textarea, input[type="text"] {
+      width: 100%;
+      background: #0b0e14;
+      color: #b0d0ff;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 8px;
+      font-family: 'Menlo', 'Consolas', monospace;
       font-size: 14px;
+      resize: vertical;
     }
-    .row:last-child { border-bottom: none; }
-    .label { color: #64748b; }
-    .value { font-weight: 500; word-break: break-all; text-align: right; max-width: 70%; }
-    .badge {
+    textarea { min-height: 100px; }
+    .button-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+    button {
+      background: #2a3a5a;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      flex: 1 1 auto;
+    }
+    button:hover { background: #3a4a6a; }
+    button.primary { background: #0d6efd; }
+    button.primary:hover { background: #0b5ed7; }
+    button.danger { background: #b02a37; }
+    button.danger:hover { background: #a52834; }
+    .output {
+      background: #0b0e14;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 8px;
+      min-height: 120px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: #b0d0ff;
+    }
+    .output .log-error { color: #ff6b6b; }
+    .output .log-success { color: #6bcb6b; }
+    .output .log-warn { color: #ffb347; }
+    .output .log-info { color: #6bb3ff; }
+    .status-badge {
       display: inline-block;
       padding: 2px 10px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
+      background: #333;
+      color: #ccc;
     }
-    .badge.ok { background: #dcfce7; color: #16a34a; }
-    .badge.fail { background: #fee2e2; color: #dc2626; }
-    .badge.warn { background: #fef9c3; color: #ca8a04; }
-    .object-grid {
+    .status-badge.ok { background: #1a4a1a; color: #6bcb6b; }
+    .status-badge.fail { background: #4a1a1a; color: #ff6b6b; }
+    .status-badge.warn { background: #4a3a1a; color: #ffb347; }
+    .var-list {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin-top: 4px;
     }
-    .object-tag {
-      background: #e2e8f0;
-      padding: 2px 8px;
+    .var-tag {
+      background: #2a2a3a;
+      padding: 2px 10px;
       border-radius: 12px;
       font-family: monospace;
       font-size: 12px;
+      color: #b0d0ff;
     }
-    .object-tag.found {
-      background: #bbf7d0;
-      color: #15803d;
-      font-weight: bold;
-    }
-    .message-area {
-      background: #f1f5f9;
-      padding: 8px 12px;
-      border-radius: 8px;
-      margin-top: 8px;
-      font-family: monospace;
-      font-size: 13px;
-      max-height: 200px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    @media (max-width: 480px) {
-      body { padding: 12px; }
-      .card { padding: 14px; }
-      .row { flex-wrap: wrap; }
-      .value { max-width: 100%; text-align: left; margin-top: 2px; }
-    }
+    .var-tag.found { background: #1a4a1a; color: #6bcb6b; }
+    .var-tag.unknown { background: #4a3a1a; color: #ffb347; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>🕵️ WebView 环境 + 桥接探测</h1>
-    <div id="info"></div>
+    <h1>🛠️ 外部控制台 · 探测 & 执行</h1>
+    <p style="color:#888; font-size:14px;">在当前页面执行 JS，或尝试与主页面通信（需主页面监听）</p>
   </div>
 
   <div class="card">
-    <h2>📡 postMessage 探测</h2>
-    <p style="font-size:14px;color:#475569;margin-bottom:8px;">向主页面发送消息，如果主页面有监听，可能会收到回复。</p>
-    <button id="postMsgBtn" style="background:#3b82f6;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;">发送探测消息</button>
-    <div id="postMsgResult" class="message-area">等待操作...</div>
+    <h2>💻 代码执行（当前页面环境）</h2>
+    <textarea id="codeInput" placeholder="输入要执行的 JS 代码...">// 例如: alert('Hello')</textarea>
+    <div class="button-row">
+      <button class="primary" id="execBtn">执行</button>
+      <button id="clearBtn">清空输出</button>
+    </div>
+    <div class="output" id="execOutput">// 输出结果</div>
+  </div>
+
+  <div class="card">
+    <h2>📡 与主页面通信 (postMessage)</h2>
+    <label>目标窗口</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+      <button id="msgOpenerBtn">发送给 opener</button>
+      <button id="msgParentBtn">发送给 parent</button>
+      <button id="msgTopBtn">发送给 top</button>
+    </div>
+    <label>消息内容 (JSON 格式)</label>
+    <input type="text" id="msgData" value='{"cmd":"getVar","var":"userMessageEdit"}'>
+    <div class="button-row">
+      <button id="sendMsgBtn">发送</button>
+    </div>
+    <div class="output" id="msgOutput">// 消息日志</div>
+  </div>
+
+  <div class="card">
+    <h2>🔍 变量探测（当前页面）</h2>
+    <div id="varList" class="var-list">加载中...</div>
+    <button id="probeBtn" style="margin-top:8px;">重新探测</button>
+  </div>
+
+  <div class="card">
+    <h2>📋 环境信息</h2>
+    <div id="envInfo" style="font-size:13px;color:#aaa;"></div>
   </div>
 
   <script>
     (function() {
-      const info = document.getElementById('info');
+      // ---------- 输出控制 ----------
+      const execOutput = document.getElementById('execOutput');
+      const msgOutput = document.getElementById('msgOutput');
 
-      // ---------- 基础环境 ----------
-      function getEnv() {
-        const data = {};
-        const ua = navigator.userAgent;
-        data.userAgent = ua;
-        data.platform = navigator.platform;
-        data.language = navigator.language;
-        data.cookieEnabled = navigator.cookieEnabled;
-        let browser = '未知', version = '';
-        if (ua.includes('Chrome') && !ua.includes('Edg')) {
-          const m = ua.match(/Chrome\/(\d+\.\d+)/);
-          if (m) { browser = 'Chrome'; version = m[1]; }
-        } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
-          const m = ua.match(/Version\/(\d+\.\d+)/);
-          if (m) { browser = 'Safari'; version = m[1]; }
-        } else if (ua.includes('Firefox')) {
-          const m = ua.match(/Firefox\/(\d+\.\d+)/);
-          if (m) { browser = 'Firefox'; version = m[1]; }
-        } else if (ua.includes('Edg')) {
-          const m = ua.match(/Edg\/(\d+\.\d+)/);
-          if (m) { browser = 'Edge'; version = m[1]; }
-        }
-        data.browser = browser;
-        data.browserVersion = version;
-        data.screenWidth = screen.width;
-        data.screenHeight = screen.height;
-        data.windowWidth = window.innerWidth;
-        data.windowHeight = window.innerHeight;
-        data.devicePixelRatio = window.devicePixelRatio || 1;
-        // DOM 统计
-        const allElements = document.querySelectorAll('*');
-        data.domElements = allElements.length;
-        let nodeCount = 0;
-        const walker = document.createTreeWalker(document, NodeFilter.SHOW_ALL);
-        while(walker.nextNode()) nodeCount++;
-        data.domNodesTotal = nodeCount;
-        data.scriptTags = document.getElementsByTagName('script').length;
-        data.styleTags = document.getElementsByTagName('style').length;
-        // 功能
-        data.localStorage = typeof localStorage !== 'undefined';
-        data.sessionStorage = typeof sessionStorage !== 'undefined';
-        data.webgl = (() => {
-          try {
-            const canvas = document.createElement('canvas');
-            return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
-          } catch(e) { return false; }
-        })();
-        data.wasm = typeof WebAssembly === 'object';
-        data.websocket = typeof WebSocket === 'function';
-        data.worker = typeof Worker === 'function';
-        data.fetch = typeof fetch === 'function';
-        data.promise = typeof Promise !== 'undefined';
-        data.eval = (() => { try { return eval('true') === true; } catch(e) { return false; } })();
-        data.functionConstructor = (() => { try { return new Function('return true')() === true; } catch(e) { return false; } })();
-        data.csp = !!(document.querySelector('meta[http-equiv="Content-Security-Policy"]') || 
-                      document.querySelector('meta[http-equiv="Content-Security-Policy-Report-Only"]'));
-        let ownProps = 0;
-        for (let key in window) {
-          if (window.hasOwnProperty(key)) ownProps++;
-        }
-        data.globalVariables = ownProps;
-        if (window.performance && window.performance.memory) {
-          data.memory = {
-            jsHeapSizeLimit: window.performance.memory.jsHeapSizeLimit,
-            totalJSHeapSize: window.performance.memory.totalJSHeapSize,
-            usedJSHeapSize: window.performance.memory.usedJSHeapSize
-          };
-        }
-        data.loadTime = performance.now().toFixed(0) + 'ms';
-        return data;
+      function logExec(msg, type='info') {
+        const cls = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : type === 'warn' ? 'log-warn' : 'log-info';
+        execOutput.innerHTML += `<div class="${cls}">${msg}</div>`;
+        execOutput.scrollTop = execOutput.scrollHeight;
       }
 
-      const env = getEnv();
-
-      // ---------- 桥接对象探测 ----------
-      function findBridges() {
-        // 常见的桥接对象名称
-        const bridgeCandidates = [
-          'Android', 'webkit', 'window', 'parent', 'top', 'self',
-          '__VUE__', '__PINIA__', '__TAURI__', 'cordova', 'Capacitor',
-          'flutter', 'electron', 'nativeBridge', 'JSBridge', 'WebViewJavascriptBridge',
-          'androidBridge', 'iOSBridge', 'bridge', 'callNative', 'postMessage'
-        ];
-        // 还要检测所有 window 属性中非标准的（排除原生）
-        const standardProps = new Set([
-          'window', 'self', 'document', 'location', 'navigator', 'history',
-          'screen', 'performance', 'localStorage', 'sessionStorage', 'console',
-          'alert', 'confirm', 'prompt', 'setTimeout', 'clearTimeout', 'setInterval',
-          'clearInterval', 'fetch', 'XMLHttpRequest', 'WebSocket', 'Worker',
-          'Promise', 'eval', 'Function', 'Object', 'Array', 'String', 'Number',
-          'Boolean', 'Symbol', 'Error', 'Math', 'Date', 'RegExp', 'JSON',
-          'isNaN', 'parseFloat', 'parseInt', 'encodeURI', 'decodeURI', 'undefined'
-        ]);
-        // 获取所有 window 自身属性
-        const allKeys = Object.getOwnPropertyNames(window);
-        const ownKeys = [];
-        for (let key of allKeys) {
-          if (!standardProps.has(key) && !key.startsWith('webkit') && !key.startsWith('on')) {
-            ownKeys.push(key);
-          }
-        }
-
-        // 检测候选桥接是否存在
-        const found = [];
-        for (let name of bridgeCandidates) {
-          if (window.hasOwnProperty(name) || (typeof window[name] !== 'undefined')) {
-            found.push(name);
-          }
-        }
-        return { found, ownKeys };
+      function logMsg(msg, type='info') {
+        const cls = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : type === 'warn' ? 'log-warn' : 'log-info';
+        msgOutput.innerHTML += `<div class="${cls}">${msg}</div>`;
+        msgOutput.scrollTop = msgOutput.scrollHeight;
       }
 
-      const bridges = findBridges();
-
-      // ---------- 渲染 ----------
-      function render() {
-        let html = '';
-
-        // 浏览器信息
-        html += `<h2>🌐 浏览器</h2>`;
-        html += `<div class="row"><span class="label">User-Agent</span><span class="value">${env.userAgent}</span></div>`;
-        html += `<div class="row"><span class="label">平台</span><span class="value">${env.platform}</span></div>`;
-        html += `<div class="row"><span class="label">语言</span><span class="value">${env.language}</span></div>`;
-        html += `<div class="row"><span class="label">浏览器</span><span class="value">${env.browser} ${env.browserVersion}</span></div>`;
-        html += `<div class="row"><span class="label">Cookie 启用</span><span class="value"><span class="badge ${env.cookieEnabled ? 'ok' : 'fail'}">${env.cookieEnabled ? '是' : '否'}</span></span></div>`;
-
-        html += `<h2>📐 显示</h2>`;
-        html += `<div class="row"><span class="label">屏幕分辨率</span><span class="value">${env.screenWidth} × ${env.screenHeight}</span></div>`;
-        html += `<div class="row"><span class="label">窗口尺寸</span><span class="value">${env.windowWidth} × ${env.windowHeight}</span></div>`;
-        html += `<div class="row"><span class="label">设备像素比</span><span class="value">${env.devicePixelRatio}</span></div>`;
-
-        html += `<h2>📄 DOM</h2>`;
-        html += `<div class="row"><span class="label">元素总数</span><span class="value">${env.domElements}</span></div>`;
-        html += `<div class="row"><span class="label">节点总数</span><span class="value">${env.domNodesTotal}</span></div>`;
-        html += `<div class="row"><span class="label">脚本标签</span><span class="value">${env.scriptTags}</span></div>`;
-        html += `<div class="row"><span class="label">样式标签</span><span class="value">${env.styleTags}</span></div>`;
-
-        html += `<h2>⚙️ 功能支持</h2>`;
-        const features = [
-          { name: 'localStorage', key: 'localStorage' },
-          { name: 'sessionStorage', key: 'sessionStorage' },
-          { name: 'WebGL', key: 'webgl' },
-          { name: 'WebAssembly', key: 'wasm' },
-          { name: 'WebSocket', key: 'websocket' },
-          { name: 'Web Worker', key: 'worker' },
-          { name: 'Fetch API', key: 'fetch' },
-          { name: 'Promise', key: 'promise' }
-        ];
-        features.forEach(f => {
-          const ok = env[f.key];
-          html += `<div class="row"><span class="label">${f.name}</span><span class="value"><span class="badge ${ok ? 'ok' : 'fail'}">${ok ? '✔ 支持' : '✘ 不支持'}</span></span></div>`;
-        });
-
-        html += `<h2>🔐 安全与执行</h2>`;
-        html += `<div class="row"><span class="label">eval()</span><span class="value"><span class="badge ${env.eval ? 'ok' : 'fail'}">${env.eval ? '可用' : '禁用/失败'}</span></span></div>`;
-        html += `<div class="row"><span class="label">new Function()</span><span class="value"><span class="badge ${env.functionConstructor ? 'ok' : 'fail'}">${env.functionConstructor ? '可用' : '禁用/失败'}</span></span></div>`;
-        html += `<div class="row"><span class="label">CSP 策略</span><span class="value"><span class="badge ${env.csp ? 'warn' : 'ok'}">${env.csp ? '可能存在' : '未检测到'}</span></span></div>`;
-
-        html += `<h2>📦 全局变量</h2>`;
-        html += `<div class="row"><span class="label">window 自身属性数</span><span class="value">${env.globalVariables}</span></div>`;
-
-        if (env.memory) {
-          html += `<h2>🧠 内存 (Chrome only)</h2>`;
-          html += `<div class="row"><span class="label">JS 堆大小限制</span><span class="value">${(env.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1)} MB</span></div>`;
-          html += `<div class="row"><span class="label">已用 JS 堆</span><span class="value">${(env.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)} MB</span></div>`;
+      // ---------- 执行代码 ----------
+      document.getElementById('execBtn').addEventListener('click', function() {
+        const code = document.getElementById('codeInput').value;
+        if (!code.trim()) { logExec('⚠️ 请输入代码', 'warn'); return; }
+        try {
+          const result = eval(code);
+          logExec(`✅ 执行成功，返回值: ${String(result)}`, 'success');
+        } catch(e) {
+          logExec(`❌ 执行错误: ${e.message}`, 'error');
         }
+      });
 
-        html += `<h2>⏱️ 性能</h2>`;
-        html += `<div class="row"><span class="label">页面加载耗时</span><span class="value">${env.loadTime}</span></div>`;
+      document.getElementById('clearBtn').addEventListener('click', function() {
+        execOutput.innerHTML = '// 输出已清空';
+      });
 
-        html += `<h2>🔒 协议</h2>`;
-        html += `<div class="row"><span class="label">当前协议</span><span class="value">${window.location.protocol}</span></div>`;
-
-        // ---------- 桥接探测结果 ----------
-        html += `<h2>🔄 桥接对象探测</h2>`;
-        if (bridges.found.length > 0) {
-          html += `<div class="row"><span class="label">发现的桥接对象</span><span class="value"><span class="badge ok">${bridges.found.join(', ')}</span></span></div>`;
-        } else {
-          html += `<div class="row"><span class="label">未发现常见桥接对象</span><span class="value"><span class="badge warn">可能无原生桥接</span></span></div>`;
+      // ---------- 消息发送 ----------
+      function sendMessage(target, targetName) {
+        if (!target) { logMsg(`⚠️ 目标窗口 (${targetName}) 不存在`, 'warn'); return; }
+        const data = document.getElementById('msgData').value;
+        let parsed;
+        try { parsed = JSON.parse(data); } catch(e) { parsed = data; }
+        try {
+          target.postMessage(parsed, '*');
+          logMsg(`📤 已发送消息到 ${targetName}，数据: ${JSON.stringify(parsed)}`, 'success');
+        } catch(e) {
+          logMsg(`❌ 发送失败: ${e.message}`, 'error');
         }
-
-        // 显示 window 自身非标准属性（可能包含自定义接口）
-        if (bridges.ownKeys.length > 0) {
-          html += `<div style="margin-top:8px;"><span class="label">其他非标准全局属性：</span>`;
-          bridges.ownKeys.forEach(key => {
-            let type = typeof window[key];
-            let val = '';
-            try {
-              if (type === 'object') val = JSON.stringify(window[key]).slice(0, 50);
-              else val = String(window[key]).slice(0, 50);
-            } catch(e) { val = '(不可序列化)'; }
-            html += `<span class="object-tag" title="${key}: ${type}${val ? ' = ' + val : ''}">${key}</span>`;
-          });
-          html += `</div>`;
-        } else {
-          html += `<div style="margin-top:8px;"><span class="label">未检测到其他非标准全局属性</span></div>`;
-        }
-
-        // 额外检测是否有 opener（如果是弹窗打开）
-        html += `<h2>🔗 窗口关系</h2>`;
-        if (window.opener) {
-          html += `<div class="row"><span class="label">opener 存在</span><span class="value"><span class="badge ok">是（可尝试跨域通信，但受限）</span></span></div>`;
-          // 尝试访问 opener 的 location（是否同源？）
-          try {
-            const loc = window.opener.location.href;
-            html += `<div class="row"><span class="label">opener 同源</span><span class="value"><span class="badge ok">是 (${loc})</span></span></div>`;
-          } catch(e) {
-            html += `<div class="row"><span class="label">opener 同源</span><span class="value"><span class="badge fail">否（跨域，无法访问DOM）</span></span></div>`;
-          }
-        } else {
-          html += `<div class="row"><span class="label">opener 存在</span><span class="value"><span class="badge fail">否（当前页面不是由窗口打开）</span></span></div>`;
-        }
-
-        info.innerHTML = html;
       }
 
-      render();
+      document.getElementById('msgOpenerBtn').addEventListener('click', function() {
+        sendMessage(window.opener, 'opener');
+      });
+      document.getElementById('msgParentBtn').addEventListener('click', function() {
+        sendMessage(window.parent, 'parent');
+      });
+      document.getElementById('msgTopBtn').addEventListener('click', function() {
+        sendMessage(window.top, 'top');
+      });
 
-      // ---------- postMessage 探测 ----------
-      const postBtn = document.getElementById('postMsgBtn');
-      const postResult = document.getElementById('postMsgResult');
-
-      // 监听来自主页面的回复（如果有）
+      // 监听来自其他窗口的消息
       window.addEventListener('message', function(event) {
-        // 为了安全，通常应该验证 origin，但这里我们只展示数据
-        postResult.innerHTML += `\n📩 收到消息：来自 ${event.origin}，数据：${JSON.stringify(event.data)}`;
+        logMsg(`📩 收到消息: 来源 ${event.origin}，数据: ${JSON.stringify(event.data)}`, 'info');
       });
 
-      postBtn.addEventListener('click', function() {
-        postResult.innerHTML = '🔄 正在发送消息...';
-        // 向父窗口（如果是 iframe 内）或 opener 发送消息
-        const target = window.opener || window.parent;
-        if (target && target !== window) {
+      // ---------- 变量探测 ----------
+      const knownVars = [
+        'userMessageEdit', 'sendMessage', 'stopAI', 'aiMessageEditor', 'getScreen',
+        'window', 'document', 'navigator', 'location'
+      ];
+
+      function probeVariables() {
+        const container = document.getElementById('varList');
+        let html = '';
+        for (let name of knownVars) {
+          let exists = false;
           try {
-            target.postMessage({ type: 'probe', text: 'Hello from external page!' }, '*');
-            postResult.innerHTML = '✅ 消息已发送 (使用 * 目标)';
-          } catch(e) {
-            postResult.innerHTML = '❌ 发送失败：' + e.message;
-          }
-        } else {
-          postResult.innerHTML = '⚠️ 没有可用的 target (opener/parent)';
+            exists = (typeof window[name] !== 'undefined');
+          } catch(e) {}
+          const cls = exists ? 'found' : 'unknown';
+          const label = exists ? '✔' : '?';
+          html += `<span class="var-tag ${cls}">${name} ${label}</span>`;
         }
-      });
+        // 额外显示当前页面其他自定义属性
+        const ownProps = Object.getOwnPropertyNames(window).filter(k => !knownVars.includes(k) && !k.startsWith('webkit') && !k.startsWith('on') && !k.startsWith('__'));
+        if (ownProps.length > 0) {
+          html += `<br><span style="color:#888;font-size:12px;">其他自定义属性: ${ownProps.slice(0,20).join(', ')}${ownProps.length>20?'...':''}</span>`;
+        }
+        container.innerHTML = html;
+      }
+
+      document.getElementById('probeBtn').addEventListener('click', probeVariables);
+      probeVariables();
+
+      // ---------- 环境信息 ----------
+      function showEnv() {
+        const el = document.getElementById('envInfo');
+        el.innerHTML = `
+          <div>User-Agent: ${navigator.userAgent}</div>
+          <div>平台: ${navigator.platform}</div>
+          <div>语言: ${navigator.language}</div>
+          <div>窗口尺寸: ${window.innerWidth}×${window.innerHeight}</div>
+          <div>协议: ${location.protocol}</div>
+          <div>opener 存在: ${!!window.opener}</div>
+          <div>parent 存在: ${window.parent !== window}</div>
+          <div>top 存在: ${window.top !== window}</div>
+        `;
+      }
+      showEnv();
+
+      // 初始日志
+      logExec('📌 外部控制台已加载，可以输入代码执行。', 'info');
+      logMsg('📌 消息监听已启动，等待接收消息。', 'info');
     })();
   </script>
 </body>
