@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>执行器 · 直接输出</title>
+  <title>极简执行器</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -55,25 +55,21 @@
       font-size: 14px;
       line-height: 1.6;
     }
-    .log-error { color: #ff6b6b; }
-    .log-success { color: #6bcb6b; }
-    .log-info { color: #6bb3ff; }
-    .log-warn { color: #ffb347; }
-    .highlight { color: #ffd700; }
+    .error { color: #ff6b6b; }
+    .success { color: #6bcb6b; }
+    .info { color: #6bb3ff; }
+    .warn { color: #ffb347; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>🧪 执行器 · 真的直接输出</h1>
-    <p style="color:#888; font-size:14px;">
-      直接输入变量名即可查看值，比如 <code>userMessageEdit</code><br>
-      也可以写表达式：<code>1+2</code>、<code>document.title</code>
-    </p>
+    <h1>⚡ 极简执行器</h1>
+    <p style="color:#888; font-size:14px;">输入 JS 代码，点击执行。直接看返回值或错误。</p>
     <textarea id="codeArea">userMessageEdit</textarea>
     <button class="btn" id="runBtn">执行</button>
   </div>
   <div class="card">
-    <h2>📋 输出日志</h2>
+    <h2>📋 输出</h2>
     <div class="output" id="logArea">// 就绪</div>
   </div>
 
@@ -83,63 +79,48 @@
       const code = document.getElementById('codeArea');
       const runBtn = document.getElementById('runBtn');
 
-      // 真正的输出函数
-      function output(value, type = 'info') {
-        let str;
-        try {
-          if (value === undefined) str = 'undefined';
-          else if (value === null) str = 'null';
-          else if (typeof value === 'string') str = value;
-          else if (typeof value === 'function') str = `[Function: ${value.name || 'anonymous'}]`;
-          else if (typeof value === 'object') {
-            try {
-              str = JSON.stringify(value, (k, v) => {
-                if (typeof v === 'function') return `[Function: ${v.name || 'anonymous'}]`;
-                return v;
-              }, 2);
-            } catch(e) {
-              str = String(value);
-            }
-          } else {
-            str = String(value);
-          }
-        } catch(e) {
-          str = `[无法序列化: ${e.message}]`;
-        }
+      function logMsg(msg, type = 'info') {
         const time = new Date().toLocaleTimeString();
-        const cls = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : type === 'warn' ? 'log-warn' : 'log-info';
-        log.innerHTML += `<div class="${cls}">[${time}] ${str}</div>`;
+        const cls = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warn' ? 'warn' : 'info';
+        log.innerHTML += `<div class="${cls}">[${time}] ${msg}</div>`;
         log.scrollTop = log.scrollHeight;
-        // 同时输出到控制台
-        console.log(value);
       }
 
-      // 劫持 console.log 也可以输出到日志
-      const origLog = console.log;
-      console.log = function(...args) {
-        origLog(...args);
-        args.forEach(arg => output(arg, 'info'));
-      };
+      function stringifyValue(value) {
+        if (value === undefined) return 'undefined';
+        if (value === null) return 'null';
+        if (typeof value === 'string') return `"${value}"`;
+        if (typeof value === 'function') return `[Function: ${value.name || 'anonymous'}]`;
+        if (typeof value === 'object') {
+          try {
+            return JSON.stringify(value, (k, v) => {
+              if (typeof v === 'function') return `[Function: ${v.name || 'anonymous'}]`;
+              if (v === undefined) return 'undefined';
+              return v;
+            }, 2);
+          } catch(e) {
+            return String(value);
+          }
+        }
+        return String(value);
+      }
 
       runBtn.addEventListener('click', function() {
         const src = code.value.trim();
         if (!src) {
-          output('⚠️ 请输入代码', 'warn');
+          logMsg('⚠️ 请输入代码', 'warn');
           return;
         }
 
         try {
-          // 直接 eval，如果有返回值就输出
           const result = eval(src);
-          if (result !== undefined) {
-            output(result, 'success');
+          if (result === undefined) {
+            logMsg('✅ 执行完成（返回值 undefined）', 'info');
           } else {
-            // 如果结果是 undefined 但代码可能是赋值语句，不额外输出
-            // 但我们可以友好提示
-            output('✅ 执行完成（无返回值）', 'info');
+            logMsg(`✅ 结果: ${stringifyValue(result)}`, 'success');
           }
         } catch(err) {
-          output(`❌ ${err.name}: ${err.message}`, 'error');
+          logMsg(`❌ ${err.name}: ${err.message}`, 'error');
           console.error(err);
         }
       });
@@ -152,8 +133,7 @@
         }
       });
 
-      // 初始提示
-      output('📌 输入变量名或表达式，点击执行即可看到结果', 'info');
+      logMsg('📌 输入变量名或表达式，点击执行', 'info');
     })();
   </script>
 </body>
