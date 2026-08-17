@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WebView 环境检测</title>
+  <title>WebView 环境检测 + 桥接探测</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -19,20 +19,8 @@
       margin-bottom: 16px;
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
     }
-    h1 {
-      font-size: 22px;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    h2 {
-      font-size: 16px;
-      margin: 12px 0 8px;
-      color: #475569;
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 6px;
-    }
+    h1 { font-size: 22px; margin-bottom: 12px; }
+    h2 { font-size: 16px; margin: 12px 0 8px; color: #475569; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
     .row {
       display: flex;
       justify-content: space-between;
@@ -42,7 +30,7 @@
     }
     .row:last-child { border-bottom: none; }
     .label { color: #64748b; }
-    .value { font-weight: 500; word-break: break-all; text-align: right; max-width: 60%; }
+    .value { font-weight: 500; word-break: break-all; text-align: right; max-width: 70%; }
     .badge {
       display: inline-block;
       padding: 2px 10px;
@@ -53,18 +41,35 @@
     .badge.ok { background: #dcfce7; color: #16a34a; }
     .badge.fail { background: #fee2e2; color: #dc2626; }
     .badge.warn { background: #fef9c3; color: #ca8a04; }
-    .summary {
-      background: #f8fafc;
-      padding: 12px;
-      border-radius: 10px;
-      margin-top: 8px;
+    .object-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
     }
-    .highlight {
+    .object-tag {
+      background: #e2e8f0;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    .object-tag.found {
+      background: #bbf7d0;
+      color: #15803d;
+      font-weight: bold;
+    }
+    .message-area {
       background: #f1f5f9;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'Menlo', 'Consolas', monospace;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-top: 8px;
+      font-family: monospace;
       font-size: 13px;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
     }
     @media (max-width: 480px) {
       body { padding: 12px; }
@@ -76,26 +81,29 @@
 </head>
 <body>
   <div class="card">
-    <h1>🕵️ WebView 环境诊断</h1>
+    <h1>🕵️ WebView 环境 + 桥接探测</h1>
     <div id="info"></div>
+  </div>
+
+  <div class="card">
+    <h2>📡 postMessage 探测</h2>
+    <p style="font-size:14px;color:#475569;margin-bottom:8px;">向主页面发送消息，如果主页面有监听，可能会收到回复。</p>
+    <button id="postMsgBtn" style="background:#3b82f6;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;">发送探测消息</button>
+    <div id="postMsgResult" class="message-area">等待操作...</div>
   </div>
 
   <script>
     (function() {
       const info = document.getElementById('info');
 
-      // 获取各类信息
+      // ---------- 基础环境 ----------
       function getEnv() {
         const data = {};
-
-        // 1. 浏览器基础
         const ua = navigator.userAgent;
         data.userAgent = ua;
         data.platform = navigator.platform;
         data.language = navigator.language;
         data.cookieEnabled = navigator.cookieEnabled;
-
-        // 简单解析 UA
         let browser = '未知', version = '';
         if (ua.includes('Chrome') && !ua.includes('Edg')) {
           const m = ua.match(/Chrome\/(\d+\.\d+)/);
@@ -112,32 +120,23 @@
         }
         data.browser = browser;
         data.browserVersion = version;
-
-        // 2. 屏幕与视口
         data.screenWidth = screen.width;
         data.screenHeight = screen.height;
         data.windowWidth = window.innerWidth;
         data.windowHeight = window.innerHeight;
         data.devicePixelRatio = window.devicePixelRatio || 1;
-
-        // 3. DOM 统计
+        // DOM 统计
         const allElements = document.querySelectorAll('*');
         data.domElements = allElements.length;
-        data.domNodes = document.childNodes.length; // 粗略
-        // 更准确：遍历所有节点
         let nodeCount = 0;
         const walker = document.createTreeWalker(document, NodeFilter.SHOW_ALL);
         while(walker.nextNode()) nodeCount++;
         data.domNodesTotal = nodeCount;
-
-        // 脚本和样式标签数量
         data.scriptTags = document.getElementsByTagName('script').length;
         data.styleTags = document.getElementsByTagName('style').length;
-
-        // 4. 功能支持
+        // 功能
         data.localStorage = typeof localStorage !== 'undefined';
         data.sessionStorage = typeof sessionStorage !== 'undefined';
-        data.cookie = navigator.cookieEnabled;
         data.webgl = (() => {
           try {
             const canvas = document.createElement('canvas');
@@ -149,21 +148,15 @@
         data.worker = typeof Worker === 'function';
         data.fetch = typeof fetch === 'function';
         data.promise = typeof Promise !== 'undefined';
-
-        // 5. 安全与执行能力
         data.eval = (() => { try { return eval('true') === true; } catch(e) { return false; } })();
         data.functionConstructor = (() => { try { return new Function('return true')() === true; } catch(e) { return false; } })();
         data.csp = !!(document.querySelector('meta[http-equiv="Content-Security-Policy"]') || 
                       document.querySelector('meta[http-equiv="Content-Security-Policy-Report-Only"]'));
-
-        // 6. 全局变量数量 (window 自身可枚举属性)
         let ownProps = 0;
         for (let key in window) {
           if (window.hasOwnProperty(key)) ownProps++;
         }
         data.globalVariables = ownProps;
-
-        // 7. 内存信息（仅 Chrome）
         if (window.performance && window.performance.memory) {
           data.memory = {
             jsHeapSizeLimit: window.performance.memory.jsHeapSizeLimit,
@@ -171,16 +164,53 @@
             usedJSHeapSize: window.performance.memory.usedJSHeapSize
           };
         }
-
-        // 8. 时间
         data.loadTime = performance.now().toFixed(0) + 'ms';
-
         return data;
       }
 
       const env = getEnv();
 
-      // 渲染
+      // ---------- 桥接对象探测 ----------
+      function findBridges() {
+        // 常见的桥接对象名称
+        const bridgeCandidates = [
+          'Android', 'webkit', 'window', 'parent', 'top', 'self',
+          '__VUE__', '__PINIA__', '__TAURI__', 'cordova', 'Capacitor',
+          'flutter', 'electron', 'nativeBridge', 'JSBridge', 'WebViewJavascriptBridge',
+          'androidBridge', 'iOSBridge', 'bridge', 'callNative', 'postMessage'
+        ];
+        // 还要检测所有 window 属性中非标准的（排除原生）
+        const standardProps = new Set([
+          'window', 'self', 'document', 'location', 'navigator', 'history',
+          'screen', 'performance', 'localStorage', 'sessionStorage', 'console',
+          'alert', 'confirm', 'prompt', 'setTimeout', 'clearTimeout', 'setInterval',
+          'clearInterval', 'fetch', 'XMLHttpRequest', 'WebSocket', 'Worker',
+          'Promise', 'eval', 'Function', 'Object', 'Array', 'String', 'Number',
+          'Boolean', 'Symbol', 'Error', 'Math', 'Date', 'RegExp', 'JSON',
+          'isNaN', 'parseFloat', 'parseInt', 'encodeURI', 'decodeURI', 'undefined'
+        ]);
+        // 获取所有 window 自身属性
+        const allKeys = Object.getOwnPropertyNames(window);
+        const ownKeys = [];
+        for (let key of allKeys) {
+          if (!standardProps.has(key) && !key.startsWith('webkit') && !key.startsWith('on')) {
+            ownKeys.push(key);
+          }
+        }
+
+        // 检测候选桥接是否存在
+        const found = [];
+        for (let name of bridgeCandidates) {
+          if (window.hasOwnProperty(name) || (typeof window[name] !== 'undefined')) {
+            found.push(name);
+          }
+        }
+        return { found, ownKeys };
+      }
+
+      const bridges = findBridges();
+
+      // ---------- 渲染 ----------
       function render() {
         let html = '';
 
@@ -192,25 +222,21 @@
         html += `<div class="row"><span class="label">浏览器</span><span class="value">${env.browser} ${env.browserVersion}</span></div>`;
         html += `<div class="row"><span class="label">Cookie 启用</span><span class="value"><span class="badge ${env.cookieEnabled ? 'ok' : 'fail'}">${env.cookieEnabled ? '是' : '否'}</span></span></div>`;
 
-        // 屏幕与视口
         html += `<h2>📐 显示</h2>`;
         html += `<div class="row"><span class="label">屏幕分辨率</span><span class="value">${env.screenWidth} × ${env.screenHeight}</span></div>`;
         html += `<div class="row"><span class="label">窗口尺寸</span><span class="value">${env.windowWidth} × ${env.windowHeight}</span></div>`;
         html += `<div class="row"><span class="label">设备像素比</span><span class="value">${env.devicePixelRatio}</span></div>`;
 
-        // DOM 统计
         html += `<h2>📄 DOM</h2>`;
         html += `<div class="row"><span class="label">元素总数</span><span class="value">${env.domElements}</span></div>`;
         html += `<div class="row"><span class="label">节点总数</span><span class="value">${env.domNodesTotal}</span></div>`;
         html += `<div class="row"><span class="label">脚本标签</span><span class="value">${env.scriptTags}</span></div>`;
         html += `<div class="row"><span class="label">样式标签</span><span class="value">${env.styleTags}</span></div>`;
 
-        // 功能支持
         html += `<h2>⚙️ 功能支持</h2>`;
         const features = [
           { name: 'localStorage', key: 'localStorage' },
           { name: 'sessionStorage', key: 'sessionStorage' },
-          { name: 'Cookie', key: 'cookie' },
           { name: 'WebGL', key: 'webgl' },
           { name: 'WebAssembly', key: 'wasm' },
           { name: 'WebSocket', key: 'websocket' },
@@ -223,35 +249,96 @@
           html += `<div class="row"><span class="label">${f.name}</span><span class="value"><span class="badge ${ok ? 'ok' : 'fail'}">${ok ? '✔ 支持' : '✘ 不支持'}</span></span></div>`;
         });
 
-        // 安全与执行
         html += `<h2>🔐 安全与执行</h2>`;
         html += `<div class="row"><span class="label">eval()</span><span class="value"><span class="badge ${env.eval ? 'ok' : 'fail'}">${env.eval ? '可用' : '禁用/失败'}</span></span></div>`;
         html += `<div class="row"><span class="label">new Function()</span><span class="value"><span class="badge ${env.functionConstructor ? 'ok' : 'fail'}">${env.functionConstructor ? '可用' : '禁用/失败'}</span></span></div>`;
         html += `<div class="row"><span class="label">CSP 策略</span><span class="value"><span class="badge ${env.csp ? 'warn' : 'ok'}">${env.csp ? '可能存在' : '未检测到'}</span></span></div>`;
 
-        // 全局变量
         html += `<h2>📦 全局变量</h2>`;
         html += `<div class="row"><span class="label">window 自身属性数</span><span class="value">${env.globalVariables}</span></div>`;
 
-        // 内存（如果有）
         if (env.memory) {
           html += `<h2>🧠 内存 (Chrome only)</h2>`;
           html += `<div class="row"><span class="label">JS 堆大小限制</span><span class="value">${(env.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1)} MB</span></div>`;
           html += `<div class="row"><span class="label">已用 JS 堆</span><span class="value">${(env.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)} MB</span></div>`;
         }
 
-        // 加载时间
         html += `<h2>⏱️ 性能</h2>`;
         html += `<div class="row"><span class="label">页面加载耗时</span><span class="value">${env.loadTime}</span></div>`;
 
-        // 附加信息：是否 HTTPS？
         html += `<h2>🔒 协议</h2>`;
         html += `<div class="row"><span class="label">当前协议</span><span class="value">${window.location.protocol}</span></div>`;
+
+        // ---------- 桥接探测结果 ----------
+        html += `<h2>🔄 桥接对象探测</h2>`;
+        if (bridges.found.length > 0) {
+          html += `<div class="row"><span class="label">发现的桥接对象</span><span class="value"><span class="badge ok">${bridges.found.join(', ')}</span></span></div>`;
+        } else {
+          html += `<div class="row"><span class="label">未发现常见桥接对象</span><span class="value"><span class="badge warn">可能无原生桥接</span></span></div>`;
+        }
+
+        // 显示 window 自身非标准属性（可能包含自定义接口）
+        if (bridges.ownKeys.length > 0) {
+          html += `<div style="margin-top:8px;"><span class="label">其他非标准全局属性：</span>`;
+          bridges.ownKeys.forEach(key => {
+            let type = typeof window[key];
+            let val = '';
+            try {
+              if (type === 'object') val = JSON.stringify(window[key]).slice(0, 50);
+              else val = String(window[key]).slice(0, 50);
+            } catch(e) { val = '(不可序列化)'; }
+            html += `<span class="object-tag" title="${key}: ${type}${val ? ' = ' + val : ''}">${key}</span>`;
+          });
+          html += `</div>`;
+        } else {
+          html += `<div style="margin-top:8px;"><span class="label">未检测到其他非标准全局属性</span></div>`;
+        }
+
+        // 额外检测是否有 opener（如果是弹窗打开）
+        html += `<h2>🔗 窗口关系</h2>`;
+        if (window.opener) {
+          html += `<div class="row"><span class="label">opener 存在</span><span class="value"><span class="badge ok">是（可尝试跨域通信，但受限）</span></span></div>`;
+          // 尝试访问 opener 的 location（是否同源？）
+          try {
+            const loc = window.opener.location.href;
+            html += `<div class="row"><span class="label">opener 同源</span><span class="value"><span class="badge ok">是 (${loc})</span></span></div>`;
+          } catch(e) {
+            html += `<div class="row"><span class="label">opener 同源</span><span class="value"><span class="badge fail">否（跨域，无法访问DOM）</span></span></div>`;
+          }
+        } else {
+          html += `<div class="row"><span class="label">opener 存在</span><span class="value"><span class="badge fail">否（当前页面不是由窗口打开）</span></span></div>`;
+        }
 
         info.innerHTML = html;
       }
 
       render();
+
+      // ---------- postMessage 探测 ----------
+      const postBtn = document.getElementById('postMsgBtn');
+      const postResult = document.getElementById('postMsgResult');
+
+      // 监听来自主页面的回复（如果有）
+      window.addEventListener('message', function(event) {
+        // 为了安全，通常应该验证 origin，但这里我们只展示数据
+        postResult.innerHTML += `\n📩 收到消息：来自 ${event.origin}，数据：${JSON.stringify(event.data)}`;
+      });
+
+      postBtn.addEventListener('click', function() {
+        postResult.innerHTML = '🔄 正在发送消息...';
+        // 向父窗口（如果是 iframe 内）或 opener 发送消息
+        const target = window.opener || window.parent;
+        if (target && target !== window) {
+          try {
+            target.postMessage({ type: 'probe', text: 'Hello from external page!' }, '*');
+            postResult.innerHTML = '✅ 消息已发送 (使用 * 目标)';
+          } catch(e) {
+            postResult.innerHTML = '❌ 发送失败：' + e.message;
+          }
+        } else {
+          postResult.innerHTML = '⚠️ 没有可用的 target (opener/parent)';
+        }
+      });
     })();
   </script>
 </body>
