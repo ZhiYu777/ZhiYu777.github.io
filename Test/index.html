@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>极简执行器</title>
+  <title>极简执行器 · 显示源码</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -48,23 +48,24 @@
       border-radius: 8px;
       padding: 10px;
       min-height: 100px;
-      max-height: 400px;
+      max-height: 500px;
       overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-all;
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1.6;
     }
     .error { color: #ff6b6b; }
     .success { color: #6bcb6b; }
     .info { color: #6bb3ff; }
     .warn { color: #ffb347; }
+    .source { color: #ffd700; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>⚡ 极简执行器</h1>
-    <p style="color:#888; font-size:14px;">输入 JS 代码，点击执行。直接看返回值或错误。</p>
+    <h1>⚡ 极简执行器 · 显示源码</h1>
+    <p style="color:#888; font-size:14px;">输入 JS 代码，点击执行。函数会显示完整源码。</p>
     <textarea id="codeArea">userMessageEdit</textarea>
     <button class="btn" id="runBtn">执行</button>
   </div>
@@ -82,7 +83,7 @@
       function logMsg(msg, type = 'info') {
         const time = new Date().toLocaleTimeString();
         const cls = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warn' ? 'warn' : 'info';
-        log.innerHTML += `<div class="${cls}">[${time}] ${msg}</div>`;
+        log.innerHTML += `<div contenteditable class="${cls}">[${time}] ${msg}</div>`;
         log.scrollTop = log.scrollHeight;
       }
 
@@ -90,11 +91,26 @@
         if (value === undefined) return 'undefined';
         if (value === null) return 'null';
         if (typeof value === 'string') return `"${value}"`;
-        if (typeof value === 'function') return `[Function: ${value.name || 'anonymous'}]`;
+        if (typeof value === 'function') {
+          // 显示函数源码
+          try {
+            const src = value.toString();
+            // 限制长度避免刷屏，但保留全部
+            return `<span class="source">${src}</span>`;
+          } catch(e) {
+            return `[Function: ${value.name || 'anonymous'}] (无法获取源码)`;
+          }
+        }
         if (typeof value === 'object') {
           try {
             return JSON.stringify(value, (k, v) => {
-              if (typeof v === 'function') return `[Function: ${v.name || 'anonymous'}]`;
+              if (typeof v === 'function') {
+                try {
+                  return `[Function: ${v.name || 'anonymous'}] ${v.toString()}`;
+                } catch(e) {
+                  return `[Function: ${v.name || 'anonymous'}]`;
+                }
+              }
               if (v === undefined) return 'undefined';
               return v;
             }, 2);
@@ -125,7 +141,6 @@
         }
       });
 
-      // Ctrl+Enter 执行
       code.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
