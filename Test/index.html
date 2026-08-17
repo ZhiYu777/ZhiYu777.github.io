@@ -59,13 +59,17 @@
     .log-success { color: #6bcb6b; }
     .log-info { color: #6bb3ff; }
     .log-warn { color: #ffb347; }
+    .highlight { color: #ffd700; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>🧪 任意代码执行 · 直接输出</h1>
-    <p style="color:#888; font-size:14px;">输入代码，点击执行。使用 <code>print(变量)</code> 查看值。</p>
-    <textarea id="codeArea">// 示例: print(window.userMessageEdit)</textarea>
+    <h1>🧪 执行器 · 真的直接输出</h1>
+    <p style="color:#888; font-size:14px;">
+      直接输入变量名即可查看值，比如 <code>userMessageEdit</code><br>
+      也可以写表达式：<code>1+2</code>、<code>document.title</code>
+    </p>
+    <textarea id="codeArea">userMessageEdit</textarea>
     <button class="btn" id="runBtn">执行</button>
   </div>
   <div class="card">
@@ -79,52 +83,77 @@
       const code = document.getElementById('codeArea');
       const runBtn = document.getElementById('runBtn');
 
-      // 全局 print 函数
-      window.print = function(value) {
+      // 真正的输出函数
+      function output(value, type = 'info') {
         let str;
         try {
-          if (typeof value === 'string') str = value;
+          if (value === undefined) str = 'undefined';
           else if (value === null) str = 'null';
-          else if (value === undefined) str = 'undefined';
-          else str = JSON.stringify(value, null, 2);
+          else if (typeof value === 'string') str = value;
+          else if (typeof value === 'function') str = `[Function: ${value.name || 'anonymous'}]`;
+          else if (typeof value === 'object') {
+            try {
+              str = JSON.stringify(value, (k, v) => {
+                if (typeof v === 'function') return `[Function: ${v.name || 'anonymous'}]`;
+                return v;
+              }, 2);
+            } catch(e) {
+              str = String(value);
+            }
+          } else {
+            str = String(value);
+          }
         } catch(e) {
-          str = String(value);
+          str = `[无法序列化: ${e.message}]`;
         }
         const time = new Date().toLocaleTimeString();
-        log.innerHTML += `<div class="log-info">[${time}] ${str}</div>`;
+        const cls = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : type === 'warn' ? 'log-warn' : 'log-info';
+        log.innerHTML += `<div class="${cls}">[${time}] ${str}</div>`;
         log.scrollTop = log.scrollHeight;
-        // 同时输出到浏览器控制台
+        // 同时输出到控制台
         console.log(value);
+      }
+
+      // 劫持 console.log 也可以输出到日志
+      const origLog = console.log;
+      console.log = function(...args) {
+        origLog(...args);
+        args.forEach(arg => output(arg, 'info'));
       };
 
       runBtn.addEventListener('click', function() {
         const src = code.value.trim();
         if (!src) {
-          log.innerHTML += `<div class="log-warn">⚠️ 请输入代码</div>`;
-          log.scrollTop = log.scrollHeight;
+          output('⚠️ 请输入代码', 'warn');
           return;
         }
-        // 清除之前可能存在的临时变量，避免干扰
+
         try {
+          // 直接 eval，如果有返回值就输出
           const result = eval(src);
-          // 如果代码执行有返回值且不是 undefined，自动打印
           if (result !== undefined) {
-            window.print(result);
+            output(result, 'success');
+          } else {
+            // 如果结果是 undefined 但代码可能是赋值语句，不额外输出
+            // 但我们可以友好提示
+            output('✅ 执行完成（无返回值）', 'info');
           }
         } catch(err) {
-          log.innerHTML += `<div class="log-error">❌ ${err.name}: ${err.message}</div>`;
-          log.scrollTop = log.scrollHeight;
+          output(`❌ ${err.name}: ${err.message}`, 'error');
           console.error(err);
         }
       });
 
-      // 快捷键：Ctrl+Enter 执行
+      // Ctrl+Enter 执行
       code.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
           runBtn.click();
         }
       });
+
+      // 初始提示
+      output('📌 输入变量名或表达式，点击执行即可看到结果', 'info');
     })();
   </script>
 </body>
